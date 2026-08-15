@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="lv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mārketinga un tūrisma nodaļas fokusā</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ical.js/1.5.0/ical.min.js"></script>
+<style>
+  :root {
+    --bg: #0b1220;
+    --panel-bg: #131c2e;
+    --panel-bg-alt: rgba(255,255,255,0.03);
+    --fg: #eef2f8;
+    --fg-dim: #93a0b8;
+    --border: rgba(255,255,255,0.08);
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,0.14);
+    --orange: #f59e0b;
+    --orange-bg: rgba(245,158,11,0.16);
+    --warning: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    overflow: hidden;
+  }
+  .dashboard {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    height: 100vh;
+    padding: 36px 48px;
+    gap: 22px;
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .title {
+    font-size: 46px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+  }
+  .clock-block { text-align: right; }
+  .clock {
+    font-size: 42px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .date {
+    font-size: 22px;
+    color: var(--fg-dim);
+    margin-top: 6px;
+  }
+  .main {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 32px;
+    min-height: 0;
+  }
+  .panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 26px 30px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .panel h2 {
+    font-size: 32px;
+    margin: 0 0 18px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .panel h2::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--fg-dim);
+    display: inline-block;
+  }
+  .todo-panel h2::before { background: #60a5fa; }
+  .calendar-panel h2::before { background: #34d399; }
+  .list-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+    scrollbar-width: none;
+  }
+  .list-scroll::-webkit-scrollbar { display: none; }
+  .empty {
+    font-size: 24px;
+    color: var(--fg-dim);
+    padding: 20px 4px;
+  }
+
+  /* To Do items */
+  .todo-item {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    border-radius: 12px;
+    background: var(--panel-bg-alt);
+    border-left: 6px solid #475569;
+    font-size: 25px;
+  }
+  .todo-item.overdue { border-left-color: var(--red); background: var(--red-bg); }
+  .todo-item.today { border-left-color: var(--orange); background: var(--orange-bg); }
+  .todo-date {
+    font-variant-numeric: tabular-nums;
+    color: var(--fg-dim);
+    width: 84px;
+    flex-shrink: 0;
+    font-size: 22px;
+  }
+  .todo-item.overdue .todo-date { color: var(--red); font-weight: 700; }
+  .todo-item.today .todo-date { color: var(--orange); font-weight: 700; }
+  .todo-title { flex: 1; }
+  .chip {
+    padding: 7px 16px;
+    border-radius: 999px;
+    font-size: 20px;
+    font-weight: 700;
+    white-space: nowrap;
+    color: #0b1220;
+    flex-shrink: 0;
+  }
+
+  /* Calendar agenda */
+  .cal-day-header {
+    font-size: 24px;
+    font-weight: 700;
+    color: #34d399;
+    margin: 18px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cal-day-header:first-child { margin-top: 0; }
+  .cal-item {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    padding: 10px 4px;
+    font-size: 24px;
+  }
+  .cal-time {
+    font-variant-numeric: tabular-nums;
+    color: var(--fg-dim);
+    width: 100px;
+    flex-shrink: 0;
+    font-size: 21px;
+  }
+  .cal-title { flex: 1; }
+
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 18px;
+    color: var(--fg-dim);
+  }
+  .warning {
+    color: var(--warning);
+  }
+</style>
+</head>
+<body>
+  <div class="dashboard">
+    <header class="header">
+      <div class="title">Mārketinga un tūrisma nodaļas fokusā</div>
+      <div class="clock-block">
+        <div id="clock" class="clock">--:--:--</div>
+        <div id="date" class="date">—</div>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="panel todo-panel">
+        <h2>Aktuālie darbi</h2>
+        <div class="list-scroll" id="todoScroll">
+          <div class="list-inner" id="todoList"></div>
+        </div>
+      </section>
+
+      <section class="panel calendar-panel">
+        <h2>Kalendārs</h2>
+        <div class="list-scroll" id="calScroll">
+          <div class="list-inner" id="calList"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span id="lastUpdated">Pēdējoreiz atjaunots: —</span>
+      <span id="statusWarning" class="warning" hidden></span>
+    </footer>
+  </div>
+
+<script>
+// ==================== KONFIGURĀCIJA ====================
+// Šeit maini datu avotus un atsvaidzes intervālu — sk. README.md.
+const CONFIG = {
+  CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQhX0b51BU646gFegAZ_CFhycq0Sh_0lU0xwmW1jhpZh5M1UQ9CYgLzZZUv-yaDkl72SQaFxe0IcE4X/pub?output=csv",
+  // Vietējais fails (CORS-drošs). GitHub Actions to sinhronizē no reālās
+  // SOGo saites ik pēc 5 minūtēm (sk. .github/workflows/sync-calendar.yml):
+  // https://mx.ventspils.lv/SOGo/dav/public/raitis.roze/Calendar/51014-69007300-10D-3EA6D300.ics
+  ICS_URL: "calendar.ics",
+  REFRESH_INTERVAL_MS: 5 * 60 * 1000,
+  CALENDAR_DAYS_AHEAD: 14,
+  AUTOSCROLL_PX_PER_TICK: 1,
+  AUTOSCROLL_TICK_MS: 40,
+  AUTOSCROLL_PAUSE_MS: 3500,
+  // Pilnas lapas pārlāde (ne tikai datu atsvaidze) reizi N ms — kiosk
+  // stabilitātei ilgstošā (dienas/nedēļas) darbībā bez restarta.
+  // Uz 0 vai false, lai izslēgtu.
+  PAGE_RELOAD_INTERVAL_MS: 6 * 60 * 60 * 1000,
+};
+// =========================================================
+
+const WEEKDAYS = ['Svētdiena','Pirmdiena','Otrdiena','Trešdiena','Ceturtdiena','Piektdiena','Sestdiena'];
+const MONTHS = ['janvāris','februāris','marts','aprīlis','maijs','jūnijs','jūlijs','augusts','septembris','oktobris','novembris','decembris'];
+const CHIP_PALETTE = ['#60a5fa','#a78bfa','#22d3ee','#4ade80','#f472b6','#818cf8','#2dd4bf','#c084fc'];
+
+let todoData = [];
+let todoError = null;
+let todoLastSuccess = null;
+let calendarData = [];
+let calError = null;
+let calLastSuccess = null;
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function pad2(n) { return String(n).padStart(2, '0'); }
+function startOfDay(d) {
+  const c = new Date(d);
+  c.setHours(0, 0, 0, 0);
+  return c;
+}
+function addDays(d, n) {
+  const c = new Date(d);
+  c.setDate(c.getDate() + n);
+  return c;
+}
+function parseLocalDate(str) {
+  if (!str) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(str).trim());
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function formatShortDate(d) {
+  return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.`;
+}
+function formatTime(d) {
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+function formatFullDate(d) {
+  return `${WEEKDAYS[d.getDay()]}, ${d.getFullYear()}. gada ${d.getDate()}. ${MONTHS[d.getMonth()]}`;
+}
+function formatDayHeader(d) {
+  const today = startOfDay(new Date());
+  const dd = startOfDay(d);
+  let prefix = '';
+  if (dd.getTime() === today.getTime()) prefix = 'Šodien — ';
+  else if (dd.getTime() === today.getTime() + 86400000) prefix = 'Rīt — ';
+  return `${prefix}${WEEKDAYS[dd.getDay()]}, ${dd.getDate()}. ${MONTHS[dd.getMonth()]}`;
+}
+function dateKey(d) {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+function chipColor(name) {
+  if (!name) return '#64748b';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return CHIP_PALETTE[hash % CHIP_PALETTE.length];
+}
+
+// ---------- Pulkstenis ----------
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+  document.getElementById('date').textContent = formatFullDate(now);
+}
+
+// ---------- Aktuālie darbi (CSV) ----------
+async function fetchToDo() {
+  try {
+    const url = CONFIG.CSV_URL + (CONFIG.CSV_URL.includes('?') ? '&' : '?') + '_=' + Date.now();
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const parsed = Papa.parse(text.trim(), { skipEmptyLines: true });
+    const rows = parsed.data;
+    const headerIdx = rows.findIndex(r => (r[0] || '').trim().toLowerCase() === 'datums');
+    if (headerIdx === -1) throw new Error('CSV galvenes rinda "Datums" netika atrasta');
+    const items = rows.slice(headerIdx + 1)
+      .map(r => ({
+        datums: (r[0] || '').trim(),
+        uzdevums: (r[1] || '').trim(),
+        atbildigais: (r[2] || '').trim(),
+        statuss: (r[3] || '').trim(),
+      }))
+      .filter(r => r.uzdevums && r.statuss.toLowerCase() === 'aktīvs')
+      .map(r => ({ ...r, dateObj: parseLocalDate(r.datums) }))
+      .filter(r => r.dateObj)
+      .sort((a, b) => a.dateObj - b.dateObj);
+    todoData = items;
+    todoError = null;
+    todoLastSuccess = new Date();
+  } catch (e) {
+    todoError = { message: e.message, time: new Date() };
+  } finally {
+    renderToDo();
+    renderFooter();
+  }
+}
+
+function renderToDo() {
+  const el = document.getElementById('todoList');
+  el.innerHTML = '';
+  if (todoData.length === 0) {
+    el.innerHTML = '<div class="empty">Nav aktīvu darbu 🎉</div>';
+  } else {
+    const today = startOfDay(new Date());
+    for (const item of todoData) {
+      const div = document.createElement('div');
+      div.className = 'todo-item';
+      div.dataset.date = item.datums;
+      if (item.dateObj < today) div.classList.add('overdue');
+      else if (item.dateObj.getTime() === today.getTime()) div.classList.add('today');
+      div.innerHTML = `
+        <span class="todo-date">${formatShortDate(item.dateObj)}</span>
+        <span class="todo-title">${escapeHtml(item.uzdevums)}</span>
+        <span class="chip" style="background:${chipColor(item.atbildigais)}">${escapeHtml(item.atbildigais || '—')}</span>
+      `;
+      el.appendChild(div);
+    }
+  }
+  setupAutoscroll('todoScroll');
+}
+
+function refreshTodoHighlights() {
+  const today = startOfDay(new Date());
+  document.querySelectorAll('#todoList .todo-item').forEach(el => {
+    const d = parseLocalDate(el.dataset.date);
+    if (!d) return;
+    el.classList.remove('overdue', 'today');
+    if (d < today) el.classList.add('overdue');
+    else if (d.getTime() === today.getTime()) el.classList.add('today');
+  });
+}
+
+// ---------- Kalendārs (ICS) ----------
+async function fetchCalendar() {
+  try {
+    const url = CONFIG.ICS_URL + (CONFIG.ICS_URL.includes('?') ? '&' : '?') + '_=' + Date.now();
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const jcalData = ICAL.parse(text);
+    const comp = new ICAL.Component(jcalData);
+    const vevents = comp.getAllSubcomponents('vevent');
+    const rangeStart = startOfDay(new Date());
+    const rangeEnd = addDays(rangeStart, CONFIG.CALENDAR_DAYS_AHEAD);
+    const occurrences = [];
+
+    for (const vevent of vevents) {
+      const event = new ICAL.Event(vevent);
+      const summary = event.summary || '(bez nosaukuma)';
+      if (event.isRecurring()) {
+        const iter = event.iterator();
+        let next;
+        let count = 0;
+        while ((next = iter.next()) && count < 3000) {
+          count++;
+          const occStart = next.toJSDate();
+          if (occStart > rangeEnd) break;
+          if (occStart >= rangeStart) {
+            const details = event.getOccurrenceDetails(next);
+            occurrences.push({
+              summary,
+              start: details.startDate.toJSDate(),
+              allDay: details.startDate.isDate,
+            });
+          }
+        }
+      } else {
+        const occStart = event.startDate.toJSDate();
+        if (occStart >= rangeStart && occStart <= rangeEnd) {
+          occurrences.push({ summary, start: occStart, allDay: event.startDate.isDate });
+        }
+      }
+    }
+    occurrences.sort((a, b) => a.start - b.start);
+    calendarData = occurrences;
+    calError = null;
+    calLastSuccess = new Date();
+  } catch (e) {
+    calError = { message: e.message, time: new Date() };
+  } finally {
+    renderCalendar();
+    renderFooter();
+  }
+}
+
+function renderCalendar() {
+  const el = document.getElementById('calList');
+  el.innerHTML = '';
+  if (calendarData.length === 0) {
+    el.innerHTML = '<div class="empty">Nav gaidāmu notikumu tuvākajās ' + CONFIG.CALENDAR_DAYS_AHEAD + ' dienās</div>';
+  } else {
+    let lastDayKey = null;
+    for (const ev of calendarData) {
+      const dk = dateKey(ev.start);
+      if (dk !== lastDayKey) {
+        lastDayKey = dk;
+        const header = document.createElement('div');
+        header.className = 'cal-day-header';
+        header.textContent = formatDayHeader(ev.start);
+        el.appendChild(header);
+      }
+      const div = document.createElement('div');
+      div.className = 'cal-item';
+      div.innerHTML = `
+        <span class="cal-time">${ev.allDay ? 'Visu dienu' : formatTime(ev.start)}</span>
+        <span class="cal-title">${escapeHtml(ev.summary)}</span>
+      `;
+      el.appendChild(div);
+    }
+  }
+  setupAutoscroll('calScroll');
+}
+
+// ---------- Kļūdu josla / pēdējais atjaunojums ----------
+function renderFooter() {
+  const lastUpdatedEl = document.getElementById('lastUpdated');
+  const warningEl = document.getElementById('statusWarning');
+  const times = [todoLastSuccess, calLastSuccess].filter(Boolean);
+  if (times.length) {
+    const latest = new Date(Math.max(...times.map(t => t.getTime())));
+    lastUpdatedEl.textContent = 'Pēdējoreiz atjaunots: ' + `${pad2(latest.getHours())}:${pad2(latest.getMinutes())}:${pad2(latest.getSeconds())}`;
+  }
+  const warnings = [];
+  if (todoError) warnings.push('Darbu saraksts neatjaunojās (' + formatTime(todoError.time) + ')');
+  if (calError) warnings.push('Kalendārs neatjaunojās (' + formatTime(calError.time) + ')');
+  if (warnings.length) {
+    warningEl.textContent = '⚠ ' + warnings.join(' · ') + ' — rāda iepriekšējos datus';
+    warningEl.hidden = false;
+  } else {
+    warningEl.hidden = true;
+  }
+}
+
+// ---------- Autoscroll ----------
+const autoscrollState = {};
+function setupAutoscroll(scrollId) {
+  const scrollEl = document.getElementById(scrollId);
+  if (autoscrollState[scrollId]) {
+    clearInterval(autoscrollState[scrollId].timer);
+    clearTimeout(autoscrollState[scrollId].pauseTimer);
+    delete autoscrollState[scrollId];
+  }
+  scrollEl.scrollTop = 0;
+  requestAnimationFrame(() => {
+    const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
+    if (maxScroll <= 4) return;
+
+    const state = { dir: 1, timer: null, pauseTimer: null };
+    autoscrollState[scrollId] = state;
+
+    function tick() {
+      scrollEl.scrollTop += state.dir * CONFIG.AUTOSCROLL_PX_PER_TICK;
+      const max = scrollEl.scrollHeight - scrollEl.clientHeight;
+      if (state.dir === 1 && scrollEl.scrollTop >= max - 1) {
+        scrollEl.scrollTop = max;
+        schedulePause(-1);
+      } else if (state.dir === -1 && scrollEl.scrollTop <= 1) {
+        scrollEl.scrollTop = 0;
+        schedulePause(1);
+      }
+    }
+    function schedulePause(nextDir) {
+      clearInterval(state.timer);
+      state.pauseTimer = setTimeout(() => {
+        state.dir = nextDir;
+        state.timer = setInterval(tick, CONFIG.AUTOSCROLL_TICK_MS);
+      }, CONFIG.AUTOSCROLL_PAUSE_MS);
+    }
+    state.pauseTimer = setTimeout(() => {
+      state.timer = setInterval(tick, CONFIG.AUTOSCROLL_TICK_MS);
+    }, CONFIG.AUTOSCROLL_PAUSE_MS);
+  });
+}
+
+// ---------- Inicializācija ----------
+updateClock();
+setInterval(updateClock, 1000);
+setInterval(refreshTodoHighlights, 60 * 1000);
+
+fetchToDo();
+fetchCalendar();
+setInterval(fetchToDo, CONFIG.REFRESH_INTERVAL_MS);
+setInterval(fetchCalendar, CONFIG.REFRESH_INTERVAL_MS);
+
+if (CONFIG.PAGE_RELOAD_INTERVAL_MS) {
+  setTimeout(() => location.reload(), CONFIG.PAGE_RELOAD_INTERVAL_MS);
+}
+</script>
+</body>
+</html>

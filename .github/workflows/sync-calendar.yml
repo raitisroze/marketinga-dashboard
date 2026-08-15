@@ -1,0 +1,33 @@
+name: Sync calendar.ics
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lejupielādēt jaunāko kalendāru no SOGo
+        run: |
+          curl -sf "https://mx.ventspils.lv/SOGo/dav/public/raitis.roze/Calendar/51014-69007300-10D-3EA6D300.ics" -o calendar.ics.new
+          if [ -s calendar.ics.new ] && grep -q "BEGIN:VCALENDAR" calendar.ics.new; then
+            mv calendar.ics.new calendar.ics
+          else
+            echo "Lejupielāde neizdevās vai fails nav derīgs ICS — paturam iepriekšējo versiju."
+            rm -f calendar.ics.new
+          fi
+
+      - name: Commit un push, ja kaut kas mainījies
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add calendar.ics
+          git diff --cached --quiet || git commit -m "Sinhronizēt calendar.ics"
+          git push
