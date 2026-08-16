@@ -5,28 +5,54 @@ publiska Google Sheets CSV), labajā pusē tuvāko 14 dienu kalendāra notikumi
 (no ICS faila). Domāts skatīšanai no attāluma, bez peles/tastatūras —
 dati atsvaidzinās automātiski.
 
+## Dzīvā versija
+
+Dashboard ir izvietots publiski, hostējot GitHub Pages ([repo:
+raitisroze/marketinga-dashboard](https://github.com/raitisroze/marketinga-dashboard)),
+ar pielāgotu domēnu:
+
+```
+http://tablo.saliedeties.lv/
+```
+
+Kalendāra dati (`calendar.ics`) automātiski sinhronizējas mākonī reizi 5
+minūtēs ar GitHub Actions ([.github/workflows/sync-calendar.yml](.github/workflows/sync-calendar.yml))
+— nekāds vietējais dators (cron u.tml.) vairs nav vajadzīgs šai sinhronizācijai.
+Katru reizi, kad `calendar.ics` mainās, GitHub Pages automātiski pārbūvē lapu.
+
+**DNS priekšnoteikums:** `saliedeties.lv` DNS jāpievieno CNAME ieraksts:
+
+```
+Nosaukums (host):  tablo
+Tips:               CNAME
+Vērtība (target):   raitisroze.github.io.
+```
+
+Pēc ieraksta pievienošanas DNS izplatās parasti dažu minūšu līdz ~1 stundas
+laikā. GitHub pēc tam automātiski izsniedz arī HTTPS sertifikātu (var paiet
+līdz pāris stundām) — līdz tam lapa būs pieejama tikai ar `http://`, ne
+`https://`.
+
 ## Faili
 
 - `index.html` — viss dashboard (HTML + CSS + JS vienā failā, bez build soļa)
-- `calendar.ics` — demo/vietturis kalendāra dati (sk. "Kalendāra dati" zemāk)
+- `calendar.ics` — kalendāra dati; GitHub Actions to automātiski pārraksta
+  (sk. "Dzīvā versija" augstāk)
+- `CNAME` — GitHub Pages pielāgotā domēna konfigurācija
+- `.github/workflows/sync-calendar.yml` — mākoņa sinhronizācijas uzdevums
 
-## Palaišana kiosk režīmā
+## Palaišana kiosk režīmā (biroja TV)
 
-Dashboard jāatver caur HTTP(S), nevis tieši kā `file://` — pretējā gadījumā
-pārlūks var bloķēt datu ielādi (CORS). Vienkāršākais veids — atvērt failu no
-web servera vai palaist vietējo serveri tajā pašā mapē:
+Vienkāršākais veids — TV/kiosk pārlūkā tieši atver dzīvo adresi:
 
-```bash
-cd /ceļš/uz/marketinga-dashboard
-python3 -m http.server 8080
 ```
-
-Tad kioskā atver `http://localhost:8080/index.html`.
+http://tablo.saliedeties.lv/
+```
 
 **Google Chrome kiosk režīmā (Windows/macOS/Linux):**
 
 ```bash
-google-chrome --kiosk --incognito http://localhost:8080/index.html
+google-chrome --kiosk --incognito http://tablo.saliedeties.lv/
 ```
 
 Windows: izmanto `chrome.exe` ceļu (parasti
@@ -39,6 +65,19 @@ autostartā (Windows: Task Scheduler / Startup mape; macOS: Login Items vai
 `launchd`; Linux: autostart `.desktop` fails vai `systemd` serviss).
 
 Ekrānam ieteicams atslēgt miega/screensaver režīmu, lai TV nenoslēdzas.
+
+### Alternatīva: lokāla palaišana (izstrādei/testēšanai)
+
+Ja vēlies palaist un testēt lokāli (nevis caur dzīvo adresi), atver failu
+caur HTTP(S), nevis tieši kā `file://` — pretējā gadījumā pārlūks bloķēs
+datu ielādi (CORS):
+
+```bash
+cd /ceļš/uz/marketinga-dashboard
+python3 -m http.server 8080
+```
+
+Tad atver `http://localhost:8080/index.html`.
 
 ## Kā mainīt datu avotus un atsvaidzes intervālu
 
@@ -92,50 +131,30 @@ https://mx.ventspils.lv/SOGo/dav/public/raitis.roze/Calendar/51014-69007300-10D-
 (pārbaudīts ar reāliem datiem — 678 notikumi, tai skaitā atkārtotie/RRULE
 notikumi, korekti parsējas un rādās dashboard).
 
-**Vienīgā atlikusī problēma: CORS.** Šis SOGo serveris atbildē nesūta
-`Access-Control-Allow-Origin` headeri, tāpēc pārlūks bloķēs `fetch()`
-pieprasījumu tieši uz šo saiti, ja `index.html` tiek atvērts no cita domēna
-(piem., no vietējā `localhost` servera vai jebkuras citas mājaslapas).
-Fetch tieši no `mx.ventspils.lv` domēna (t.i., ja pats dashboard tiktu
-izvietots tajā pašā serverī) šo ierobežojumu neskartu.
-
+**Vienīgā problēma: CORS.** Šis SOGo serveris atbildē nesūta
+`Access-Control-Allow-Origin` headeri, tāpēc pārlūks bloķē `fetch()`
+pieprasījumu tieši uz šo saiti, ja `index.html` tiek atvērts no cita domēna.
 Tāpēc dashboard pēc noklusējuma (`CONFIG.ICS_URL = "calendar.ics"`) lasa
-kalendāru no **vietēja faila** blakus `index.html`, nevis tieši no SOGo —
-tas ir gan CORS-drošs, gan ātrāks. Izvēlies vienu no diviem variantiem, lai
-šis fails saturētu aktuālus datus:
+kalendāru no **vietēja faila** blakus `index.html`, nevis tieši no SOGo.
 
-**A) Ieplāno automātisku sinhronizāciju (ieteicams, jau uzstādīts šajā datorā)**
-— uz datora/servera, kur atrodas `index.html`, uzstādi periodisku uzdevumu,
-kas pārraksta `calendar.ics` ar svaigiem datiem no strādājošās saites:
+**Risinājums: automātiska sinhronizācija mākonī.** Repozitorijā ir GitHub
+Actions uzdevums ([.github/workflows/sync-calendar.yml](.github/workflows/sync-calendar.yml)),
+kas ik pēc 5 minūtēm (arī manuāli palaižams no repo "Actions" cilnes):
 
-```bash
-curl -s "https://mx.ventspils.lv/SOGo/dav/public/raitis.roze/Calendar/51014-69007300-10D-3EA6D300.ics" \
-  -o /ceļš/uz/marketinga-dashboard/calendar.ics
-```
+1. Lejupielādē svaigāko ICS no augstāk minētās SOGo saites.
+2. Ja lejupielāde izdevusies un fails ir derīgs, pārraksta `calendar.ics`
+   repozitorijā un izveido commit.
+3. Push uz `main` automātiski izraisa GitHub Pages pārbūvi — nākamajā
+   `REFRESH_INTERVAL_MS` reizē (5 min) TV ekrānā parādās jaunākie dati.
 
-- **macOS/Linux (cron)** — `crontab -e` un pievieno rindu, kas to darbina ik
-  minūti (šajā datorā tas jau ir uzstādīts tieši šādi):
-  ```
-  * * * * * curl -s "https://mx.ventspils.lv/SOGo/dav/public/raitis.roze/Calendar/51014-69007300-10D-3EA6D300.ics" -o /Users/raitisroze/Documents/marketinga-dashboard/calendar.ics
-  ```
-  Pārbaudi ar `crontab -l`, izmaini ar `crontab -e`, izņem ar
-  `crontab -e` un izdzēs attiecīgo rindu.
-- **Windows (Task Scheduler)** — izveido uzdevumu, kas ik minūti palaiž
-  `curl.exe` (iebūvēts Windows 10/11) ar tiem pašiem parametriem.
+Tas darbojas pilnībā GitHub serveros — nav atkarīgs no neviena vietēja
+datora vai cron uzdevuma. Uzdevuma vēsture un iespējamas kļūdas redzamas
+repo → **Actions** cilnē.
 
-Atbilstoši dashboard pats (`CONFIG.REFRESH_INTERVAL_MS` faila `index.html`
-CONFIG sadaļā) tagad arī pārbauda `calendar.ics`/CSV ik minūti, lai
-sinhronizācijas ātrums un lapas atsvaidze būtu saskaņoti.
-
-**B) Izvieto `index.html` tajā pašā domēnā** (`mx.ventspils.lv`) — tad var
-tieši iestatīt `CONFIG.ICS_URL` uz augstāk minēto saiti bez lokālas kopēšanas,
-jo tas vairs nebūs starpdomēnu (cross-origin) pieprasījums. Šim variantam
-nepieciešama IT palīdzība, lai failu izvietotu tajā serverī.
-
-Ja koplietošana SOGo pusē kādreiz atkal tiktu izslēgta un saite pārstātu
-strādāt, dashboard automātiski turpinās rādīt pēdējos veiksmīgi ielādētos
-datus (sk. "Kļūdu apstrāde" zemāk) — jāatjauno tikai koplietošana SOGo
-saskarnē (kalendārs → "Share"/"Kopīgot" → publiska piekļuve).
+Ja koplietošana SOGo pusē kādreiz tiktu izslēgta un saite pārstātu strādāt,
+sinhronizācijas uzdevums paturēs iepriekšējo derīgo `calendar.ics` versiju
+(neieraksta tukšu/kļūdainu failu), un dashboard turpinās rādīt pēdējos
+veiksmīgi ielādētos datus (sk. "Kļūdu apstrāde" zemāk).
 
 ## Kļūdu apstrāde
 
