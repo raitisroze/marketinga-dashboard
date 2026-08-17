@@ -22,9 +22,11 @@ iesaistīts šajā sinhronizācijā.
 
 cPanel Cron Job komanda (Minute=`*/5`, pārējie=`*`):
 ```
-/usr/bin/curl -s "https://mx.ventspils.lv/SOGo/dav/public/raitis.roze/Calendar/51014-69007300-10D-3EA6D300.ics" -o /home/salibsve/tablo.saliedeties.lv/calendar.ics
+/usr/bin/curl -s "https://mx.ventspils.lv/SOGo/dav/public/raitis.roze/Calendar/51014-69007300-10D-3EA6D300.ics" -o /home/salibsve/tablo.saliedeties.lv/calendar.ics.tmp && mv /home/salibsve/tablo.saliedeties.lv/calendar.ics.tmp /home/salibsve/tablo.saliedeties.lv/calendar.ics
 ```
-(pilns ceļš `/usr/bin/curl` obligāts — cPanel cron videi nav `curl` PATH bez tā)
+(pilns ceļš `/usr/bin/curl` obligāts — cPanel cron videi nav `curl` PATH bez tā.
+Lejupielāde iet uz `.tmp` failu un tikai pēc tam `mv` pārvieto to vietā —
+tas ir atomisks, lai dashboard nekad nenolasītu daļēji uzrakstītu failu.)
 
 DNS (`saliedeties.lv`) tiek pārvaldīts **Cloudflare** (NS: bowen.ns.cloudflare.com,
 carlane.ns.cloudflare.com — nevis NIC.LV vai Namecheap tieši). `tablo` ieraksts
