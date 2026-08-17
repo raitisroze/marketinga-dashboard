@@ -196,7 +196,7 @@
       </section>
 
       <section class="panel calendar-panel">
-        <h2>Kalendārs</h2>
+        <h2>Kalendārs (šī nedēļa)</h2>
         <div class="list-scroll" id="calScroll">
           <div class="list-inner" id="calList"></div>
         </div>
@@ -214,12 +214,11 @@
 // Šeit maini datu avotus un atsvaidzes intervālu — sk. README.md.
 const CONFIG = {
   CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQhX0b51BU646gFegAZ_CFhycq0Sh_0lU0xwmW1jhpZh5M1UQ9CYgLzZZUv-yaDkl72SQaFxe0IcE4X/pub?output=csv",
-  // Vietējais fails (CORS-drošs). GitHub Actions to sinhronizē no reālās
-  // SOGo saites ik pēc 5 minūtēm (sk. .github/workflows/sync-calendar.yml):
+  // Vietējais fails (CORS-drošs). Servera cron (cPanel) to sinhronizē no
+  // reālās SOGo saites ik pēc 5 minūtēm:
   // https://mx.ventspils.lv/SOGo/dav/public/raitis.roze/Calendar/51014-69007300-10D-3EA6D300.ics
   ICS_URL: "calendar.ics",
   REFRESH_INTERVAL_MS: 5 * 60 * 1000,
-  CALENDAR_DAYS_AHEAD: 14,
   AUTOSCROLL_PX_PER_TICK: 1,
   AUTOSCROLL_TICK_MS: 40,
   AUTOSCROLL_PAUSE_MS: 3500,
@@ -249,6 +248,10 @@ function startOfDay(d) {
   const c = new Date(d);
   c.setHours(0, 0, 0, 0);
   return c;
+}
+function startOfWeek(d) {
+  const daysSinceMonday = (d.getDay() + 6) % 7;
+  return addDays(startOfDay(d), -daysSinceMonday);
 }
 function addDays(d, n) {
   const c = new Date(d);
@@ -375,8 +378,8 @@ async function fetchCalendar() {
     const jcalData = ICAL.parse(text);
     const comp = new ICAL.Component(jcalData);
     const vevents = comp.getAllSubcomponents('vevent');
-    const rangeStart = startOfDay(new Date());
-    const rangeEnd = addDays(rangeStart, CONFIG.CALENDAR_DAYS_AHEAD);
+    const rangeStart = startOfWeek(new Date());
+    const rangeEnd = addDays(rangeStart, 7);
     const occurrences = [];
 
     for (const vevent of vevents) {
@@ -422,7 +425,7 @@ function renderCalendar() {
   const el = document.getElementById('calList');
   el.innerHTML = '';
   if (calendarData.length === 0) {
-    el.innerHTML = '<div class="empty">Nav gaidāmu notikumu tuvākajās ' + CONFIG.CALENDAR_DAYS_AHEAD + ' dienās</div>';
+    el.innerHTML = '<div class="empty">Nav notikumu šonedēļ</div>';
   } else {
     let lastDayKey = null;
     for (const ev of calendarData) {

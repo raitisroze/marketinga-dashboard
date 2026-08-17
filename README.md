@@ -1,58 +1,76 @@
 # Mārketinga un tūrisma nodaļas fokusā — TV dashboard
 
 Viena-faila HTML dashboard biroja ekrānam/TV: kreisajā pusē aktuālie darbi (no
-publiska Google Sheets CSV), labajā pusē tuvāko 14 dienu kalendāra notikumi
+publiska Google Sheets CSV), labajā pusē aktuālās nedēļas kalendāra notikumi
 (no ICS faila). Domāts skatīšanai no attāluma, bez peles/tastatūras —
 dati atsvaidzinās automātiski.
 
 ## Dzīvā versija
 
-Dashboard ir izvietots publiski, hostējot GitHub Pages ([repo:
-raitisroze/marketinga-dashboard](https://github.com/raitisroze/marketinga-dashboard)),
-ar pielāgotu domēnu:
+Dashboard ir izvietots publiski Namecheap koplietotajā hostingā (cPanel
+lietotājs `salibsve`), ar pielāgotu domēnu:
 
 ```
-http://tablo.saliedeties.lv/
+https://tablo.saliedeties.lv/
 ```
 
-Kalendāra dati (`calendar.ics`) automātiski sinhronizējas mākonī reizi 5
-minūtēs ar GitHub Actions ([.github/workflows/sync-calendar.yml](.github/workflows/sync-calendar.yml))
-— nekāds vietējais dators (cron u.tml.) vairs nav vajadzīgs šai sinhronizācijai.
-Katru reizi, kad `calendar.ics` mainās, GitHub Pages automātiski pārbūvē lapu.
+Kalendāra dati (`calendar.ics`) automātiski sinhronizējas **tieši serverī**
+ar cPanel Cron Job (reizi 5 minūtēs — koplietotā hostinga minimālais
+iespējamais intervāls), kas lejupielādē svaigāko ICS no SOGo un pārraksta
+failu vietā. Nekāds vietējais dators vai GitHub Actions vairs nav
+iesaistīts šajā sinhronizācijā.
 
-**DNS priekšnoteikums:** `saliedeties.lv` DNS jāpievieno CNAME ieraksts:
-
+cPanel Cron Job komanda (Minute=`*/5`, pārējie=`*`):
 ```
-Nosaukums (host):  tablo
-Tips:               CNAME
-Vērtība (target):   raitisroze.github.io.
+/usr/bin/curl -s "https://mx.ventspils.lv/SOGo/dav/public/raitis.roze/Calendar/51014-69007300-10D-3EA6D300.ics" -o /home/salibsve/tablo.saliedeties.lv/calendar.ics
+```
+(pilns ceļš `/usr/bin/curl` obligāts — cPanel cron videi nav `curl` PATH bez tā)
+
+DNS (`saliedeties.lv`) tiek pārvaldīts **Cloudflare** (NS: bowen.ns.cloudflare.com,
+carlane.ns.cloudflare.com — nevis NIC.LV vai Namecheap tieši). `tablo` ieraksts
+tur ir tips **A**, vērtība `66.29.132.18` (Namecheap koplietotā IP), proxy
+status "DNS only".
+
+### GitHub repo — tikai versiju vēsture
+
+[github.com/raitisroze/marketinga-dashboard](https://github.com/raitisroze/marketinga-dashboard)
+satur šo pašu kodu versiju kontrolei, bet **vairs nav dzīvais hostings** —
+sākotnēji tika izmantots GitHub Pages + GitHub Actions, taču to plānoto
+uzdevumu izpildes kavēšanās (līdz pat ~60 min, nevis konfigurētās 5 min)
+bija iemesls pārcelties uz Namecheap ar reālu servera cron. Attiecīgie
+GitHub Pages faili (`CNAME`, `.github/workflows/`) tāpēc dzēsti no repo.
+
+### Izvietošana (deploy) pēc izmaiņām
+
+```bash
+cd /Users/raitisroze/marketinga-dashboard
+./scripts/deploy.sh index.html
 ```
 
-Pēc ieraksta pievienošanas DNS izplatās parasti dažu minūšu līdz ~1 stundas
-laikā. GitHub pēc tam automātiski izsniedz arī HTTPS sertifikātu (var paiet
-līdz pāris stundām) — līdz tam lapa būs pieejama tikai ar `http://`, ne
-`https://`.
+Skripts izmanto FTPS pieejas datus no `.env.deploy` (gitignored, lokāls
+fails, nav repo). `--disable-epsv` karodziņš ir obligāts — bez tā šī servera
+FTPS dati savienojums intermitējoši atgriež "451 Transfer aborted" kļūdu.
 
 ## Faili
 
 - `index.html` — viss dashboard (HTML + CSS + JS vienā failā, bez build soļa)
-- `calendar.ics` — kalendāra dati; GitHub Actions to automātiski pārraksta
+- `calendar.ics` — kalendāra dati; servera cron to automātiski pārraksta
   (sk. "Dzīvā versija" augstāk)
-- `CNAME` — GitHub Pages pielāgotā domēna konfigurācija
-- `.github/workflows/sync-calendar.yml` — mākoņa sinhronizācijas uzdevums
+- `scripts/deploy.sh` — augšupielādē failus uz Namecheap pa FTPS
+- `.env.deploy` — FTPS pieejas dati (gitignored, tikai lokāli)
 
 ## Palaišana kiosk režīmā (biroja TV)
 
 Vienkāršākais veids — TV/kiosk pārlūkā tieši atver dzīvo adresi:
 
 ```
-http://tablo.saliedeties.lv/
+https://tablo.saliedeties.lv/
 ```
 
 **Google Chrome kiosk režīmā (Windows/macOS/Linux):**
 
 ```bash
-google-chrome --kiosk --incognito http://tablo.saliedeties.lv/
+google-chrome --kiosk --incognito https://tablo.saliedeties.lv/
 ```
 
 Windows: izmanto `chrome.exe` ceļu (parasti
@@ -89,7 +107,6 @@ const CONFIG = {
   CSV_URL: "...",              // publiskā CSV saite (Aktuālie darbi)
   ICS_URL: "calendar.ics",     // kalendāra ICS fails vai saite
   REFRESH_INTERVAL_MS: 5 * 60 * 1000,  // atsvaidzes intervāls (ms)
-  CALENDAR_DAYS_AHEAD: 14,     // cik dienas uz priekšu rādīt kalendārā
   AUTOSCROLL_PX_PER_TICK: 1,   // autoscroll ātrums
   AUTOSCROLL_TICK_MS: 40,
   AUTOSCROLL_PAUSE_MS: 3500,   // pauze augšā/apakšā pirms scroll virziena maiņas
@@ -137,24 +154,20 @@ pieprasījumu tieši uz šo saiti, ja `index.html` tiek atvērts no cita domēna
 Tāpēc dashboard pēc noklusējuma (`CONFIG.ICS_URL = "calendar.ics"`) lasa
 kalendāru no **vietēja faila** blakus `index.html`, nevis tieši no SOGo.
 
-**Risinājums: automātiska sinhronizācija mākonī.** Repozitorijā ir GitHub
-Actions uzdevums ([.github/workflows/sync-calendar.yml](.github/workflows/sync-calendar.yml)),
-kas ik pēc 5 minūtēm (arī manuāli palaižams no repo "Actions" cilnes):
+**Risinājums: automātiska sinhronizācija tieši serverī.** Namecheap cPanel
+Cron Job (sk. "Dzīvā versija" augstāk) ik pēc 5 minūtēm lejupielādē svaigāko
+ICS no augstāk minētās SOGo saites un pārraksta `calendar.ics` — tā kā abi
+(cron un dashboard) darbojas uz tā paša servera/domēna, CORS problēma
+vienkārši neparādās.
 
-1. Lejupielādē svaigāko ICS no augstāk minētās SOGo saites.
-2. Ja lejupielāde izdevusies un fails ir derīgs, pārraksta `calendar.ics`
-   repozitorijā un izveido commit.
-3. Push uz `main` automātiski izraisa GitHub Pages pārbūvi — nākamajā
-   `REFRESH_INTERVAL_MS` reizē (5 min) TV ekrānā parādās jaunākie dati.
-
-Tas darbojas pilnībā GitHub serveros — nav atkarīgs no neviena vietēja
-datora vai cron uzdevuma. Uzdevuma vēsture un iespējamas kļūdas redzamas
-repo → **Actions** cilnē.
+(Vēsturiski šeit tika izmantots GitHub Actions mākoņa uzdevums, taču GitHub
+plānoto uzdevumu izpildes kavēšanās — reizēm līdz ~60 min, nevis
+konfigurētās 5 min — bija iemesls pārcelties uz reālu servera cron.)
 
 Ja koplietošana SOGo pusē kādreiz tiktu izslēgta un saite pārstātu strādāt,
-sinhronizācijas uzdevums paturēs iepriekšējo derīgo `calendar.ics` versiju
-(neieraksta tukšu/kļūdainu failu), un dashboard turpinās rādīt pēdējos
-veiksmīgi ielādētos datus (sk. "Kļūdu apstrāde" zemāk).
+`curl` komanda vienkārši neizdosies un `calendar.ics` paliks iepriekšējā
+(pēdējā veiksmīgi lejupielādētā) stāvoklī, un dashboard turpinās rādīt
+pēdējos veiksmīgi ielādētos datus (sk. "Kļūdu apstrāde" zemāk).
 
 ## Kļūdu apstrāde
 
